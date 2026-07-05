@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SkyLog Radar</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/skylog.css') }}" />
+</head>
+
+<body>
+    <!-- ------------------------------------------------------------------
+         Top Bar: App Title
+    ------------------------------------------------------------------- -->
+    <div class="topbar-row">
+        <strong>SkyLog Radar</strong>
+    </div>
+
+    <!-- ------------------------------------------------------------------
+         Top Bar: Location, Radius, and Counts
+    ------------------------------------------------------------------- -->
+    <div class="topbar-row">
+        <label style="display:flex;align-items:center;gap:6px;">
+            ZIP
+            <input id="zip-input" type="text" placeholder="37601" style="width:80px;" />
+        </label>
+
+        <button id="update-location-btn">Update Location</button>
+
+        <label style="display:flex;align-items:center;gap:6px;">
+            Radius
+            <select id="radius-select">
+                <option value="25">25 mi</option>
+                <option value="50">50 mi</option>
+                <option value="75">75 mi</option>
+                <option value="100" selected>100 mi</option>
+                <option value="150">150 mi</option>
+                <option value="200">200 mi</option>
+                <option value="250">250 mi</option>
+            </select>
+        </label>
+
+        <span id="aircraft-count">Aircraft: 0</span>
+        <span id="category-counts">Commercial: 0 | Civilian: 0 | Military: 0 | Unknown: 0</span>
+    </div>
+
+    <!-- ------------------------------------------------------------------
+         Radar Controls Header
+    ------------------------------------------------------------------- -->
+    <div class="controls-header" onclick="toggleTopControls()">
+        ▶ Radar Controls
+    </div>
+
+    <!-- ------------------------------------------------------------------
+         Radar Controls Panels
+    ------------------------------------------------------------------- -->
+    <div id="top-controls" class="collapsed">
+        <div class="control-panel">
+            <div class="control-title">🎛 Radar</div>
+            <label><input type="checkbox" id="toggle-labels" checked /> Labels</label>
+            <label><input type="checkbox" id="toggle-sweep" checked /> Sweep</label>
+            <label><input type="checkbox" id="toggle-trails" checked /> Trails</label>
+        </div>
+
+        <div class="control-panel">
+            <div class="control-title">✈ Aircraft Filters</div>
+            <label><input type="checkbox" id="filter-civilian" checked /> Civilian</label>
+            <label><input type="checkbox" id="filter-commercial" checked /> Commercial</label>
+            <label><input type="checkbox" id="filter-military" checked /> Military</label>
+            <label><input type="checkbox" id="filter-unknown" checked /> Unknown</label>
+        </div>
+
+        <div class="control-panel">
+            <div class="control-title">🔥 Heat Map</div>
+            <label><input type="checkbox" id="toggle-heatmap" /> Enable</label>
+
+            <label>
+                Type
+                <select id="heatmap-mode">
+                    <option value="All">All Aircraft</option>
+                    <option value="Civilian">Civilian</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Favorites">Favorites</option>
+                    <option value="Military">Military</option>
+                </select>
+            </label>
+
+            <label>
+                Time Range
+                <select id="heatmap-time-range">
+                    <option value="live">Live</option>
+                    <option value="1h">Last Hour</option>
+                    <option value="24h">Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <!-- ------------------------------------------------------------------
+         Leaflet Map
+    ------------------------------------------------------------------- -->
+    <div id="map"></div>
+
+    <!-- ------------------------------------------------------------------
+         Left Details Side Panel
+    ------------------------------------------------------------------- -->
+    <div id="details-side-panel" class="collapsed">
+        <div class="details-side-header">
+            <strong>Aircraft Details</strong>
+            <button onclick="closeDetailsPanel()">✕</button>
+        </div>
+
+        <div id="details-side-content">
+            Select an aircraft.
+        </div>
+    </div>
+
+    <!-- ------------------------------------------------------------------
+         Bottom Status Bar
+    ------------------------------------------------------------------- -->
+    <div id="status-bar">
+        <span id="last-update">Last Update: --</span>
+        <span id="api-status">API: --</span>
+    </div>
+
+    <!-- ------------------------------------------------------------------
+         Right Sidebar
+    ------------------------------------------------------------------- -->
+    <div id="sidebar">
+        <div id="sidebar-top">
+            <h2 style="padding:10px;">Aircraft</h2>
+
+            <div style="padding:10px;">
+                <button id="clear-focus-btn">Clear Focus</button>
+                <button id="export-csv-btn">Export CSV</button>
+                <button id="pause-updates-btn">Pause Updates</button>
+                <button id="mission-mode-btn" onclick="toggleMissionMode()">🎯 Mission Mode: OFF</button>
+            </div>
+
+            <div style="padding:10px;">
+                <input
+                    id="aircraft-search"
+                    type="text"
+                    placeholder="Search callsign, tail, type..."
+                    style="width:95%;padding:6px;background:#111;color:white;border:1px solid #555;"
+                />
+            </div>
+
+            <div class="sidebar-section-header" onclick="toggleSidebarSection('hot-aircraft-panel')">
+                <span class="section-title">🔥 Hot Aircraft</span>
+                <button onclick="event.stopPropagation(); showScoreInfo();" style="float:right;">?</button>
+            </div>
+            <div id="hot-aircraft-panel" class="sidebar-section-body collapsed">None yet</div>
+
+            <div class="sidebar-section-header" onclick="toggleSidebarSection('leaders-panel')">
+                <span class="section-title">🏆 Today’s Leaders</span>
+            </div>
+            <div id="leaders-panel" class="sidebar-section-body collapsed">None yet</div>
+
+            <div class="sidebar-section-header" onclick="toggleSidebarSection('favorites-panel')">
+                <span class="section-title">⭐ Favorites</span>
+                <span id="favorites-header-count" class="header-count">0</span>
+            </div>
+            <div id="favorites-panel" class="sidebar-section-body collapsed">None selected</div>
+
+            <div class="sidebar-section-header" onclick="toggleSidebarSection('military-alerts-panel')">
+                <span class="section-title">🚨 Military Alerts</span>
+                <span id="military-header-count" class="header-count">0</span>
+            </div>
+            <div id="military-alerts-panel" class="sidebar-section-body collapsed">None active</div>
+
+            <div class="sidebar-section-header" onclick="toggleSidebarSection('notifications-panel')">
+                <span class="section-title">🔔 Notifications</span>
+                <span id="notifications-header-count" class="header-count">0</span>
+            </div>
+            <div id="notifications-panel" class="sidebar-section-body collapsed">
+                <div style="padding:10px;color:#aaa;">No notifications yet.</div>
+            </div>
+
+            <div class="sidebar-section-header" onclick="toggleSidebarSection('aircraft-list-section')">
+                <span class="section-title">✈ Aircraft List</span>
+                <span id="aircraft-list-header-count" class="header-count">0</span>
+            </div>
+        </div>
+
+        <div id="aircraft-list-section" class="sidebar-section-body">
+            <div id="aircraft-list-container">
+                <table id="aircraft-table">
+                    <thead>
+                        <tr>
+                            <th class="star-col">★</th>
+                            <th class="callsign-col" onclick="sortAircraft('callsign')">CALLSIGN</th>
+                            <th class="dist-col" onclick="sortAircraft('distance')">DIST</th>
+                            <th class="alt-col" onclick="sortAircraft('altitude')">ALT</th>
+                            <th class="speed-col" onclick="sortAircraft('speed')">SPD</th>
+                            <th class="type-col" onclick="sortAircraft('type')">TYPE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aircraft-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ------------------------------------------------------------------
+         Sidebar Toggle Button
+    ------------------------------------------------------------------- -->
+    <button id="sidebar-toggle-btn" onclick="toggleSidebar()">❯</button>
+    <!-- ------------------------------------------------------------------
+         Flask config and modular SkyLog JavaScript files
+    ------------------------------------------------------------------- -->
+    <script>
+        const config = {
+            homeLat: {{ my_lat }},
+            homeLon: {{ my_lon }},
+            radiusMiles: {{ radius }},
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/core.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/helpers.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/intelligence.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/alerts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/notifications.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/details.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/controls.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+</body>
+</html>
