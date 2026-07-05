@@ -1,8 +1,9 @@
-function addNotification(type, message) {
+function addNotification(type, message, severity="INFO") {
             state.notifications.unshift({
-                message,
-                timestamp: new Date().toLocaleTimeString(),
-                type,
+                title:title,
+                message:message,
+                severity:severity,
+                time:new Date()
             });
 
             state.notifications = state.notifications.slice(0, 25);
@@ -58,19 +59,68 @@ function checkMilitaryAlerts(planes) {
             });
         }
 
-function updateNotificationsPanel() {
+        /* ------------------------------------------------------------------
+           Function: updateNotificationsPanel
+           Builds the notification list with alert severity.
+        ------------------------------------------------------------------ */
+        function updateNotificationsPanel() {
             const panel = $("notifications-panel");
 
             if (state.notifications.length === 0) {
-                panel.innerHTML = `<div style="padding:10px;color:#aaa;">No notifications yet.</div>`;
+                panel.innerHTML = `
+                    <div style="
+                        padding:10px;
+                        color:#aaa;
+                    ">
+                        No notifications yet.
+                    </div>
+                `;
                 return;
             }
 
-            panel.innerHTML = state.notifications.map((note) => `
-                <div style="padding:8px 10px;border-bottom:1px solid #333;">
-                    <strong>${note.type}</strong><br>
-                    <span style="color:#aaa;">${note.timestamp}</span><br>
-                    ${note.message}
-                </div>
-            `).join("");
+            panel.innerHTML = state.notifications.map((note) => {
+                let severityIcon = "🟢";
+                if (note.severity === "WATCH") {
+                    severityIcon = "🟡";
+                }
+                if (note.severity === "CRITICAL") {
+                    severityIcon = "🔴";
+                }
+                return `
+                    <div style="
+                        padding:8px 10px;
+                        border-bottom:1px solid #333;
+                    ">
+        
+                        <div style="
+                            font-size:11px;
+                            font-weight:bold;
+                            margin-bottom:4px;
+                        ">
+                            ${severityIcon} ${note.severity || "INFO"}
+                        </div>
+        
+                        <strong>
+                            ${note.type}
+                        </strong>
+        
+                        <br>
+        
+                        <span style="
+                            color:#aaa;
+                            font-size:11px;
+                        ">
+                            ${note.timestamp}
+                        </span>
+        
+                        <br>        
+        
+                        <span>
+                            ${note.message}
+                        </span>        
+        
+                    </div>
+                `;
+
+            }).join("");
         }

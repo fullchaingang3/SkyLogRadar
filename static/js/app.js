@@ -13,10 +13,9 @@ async function updateAircraft() {
         plane.analysis = analyzeAircraft(plane);
     });
 
+    evaluateAlertRules(planes);
     updateMilitaryAlerts(planes);
     updateFavoritesPanel(planes);
-    checkFavoriteAlerts(planes);
-    checkMilitaryAlerts(planes);
     updateAircraftList(planes);
     updateHotAircraftPanel(planes);
     updateLeadersPanel(planes);
